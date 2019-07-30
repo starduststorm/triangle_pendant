@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 18)
+    (drawings 17)
     (tracks 425)
     (zones 0)
     (modules 54)
@@ -3229,9 +3229,6 @@
     )
   )
 
-  (gr_text "I think I have to add up space up top" (at 83.7946 41.656) (layer F.Cu)
-    (effects (font (size 1.5 1.5) (thickness 0.3)))
-  )
   (gr_text ∆ (at 82.042 68.58) (layer F.SilkS)
     (effects (font (size 1 1) (thickness 0.15)))
   )

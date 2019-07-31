@@ -134,6 +134,8 @@ if args.delete_all_traces:
 		print("Deleting track {}".format(t))
 		board._obj.Delete(t)
 elif args.delete_short_traces:
+	print("FIXME: disabled because it removes vias")
+	exit(1)
 	tracks = board._obj.GetTracks()
 	for t in tracks:
 		start = t.GetStart()

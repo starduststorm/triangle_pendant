@@ -1,4 +1,4 @@
-(kicad_pcb (version 20171130) (host pcbnew "(5.1.2-1)-1")
+(kicad_pcb (version 20171130) (host pcbnew "(5.1.5-0-10_14)")
 
   (general
     (thickness 1.6)
@@ -3255,7 +3255,7 @@
     )
   )
 
-  (gr_text "Notes:\n* Wire 5v and ground through each LED and remove center pads (to cut down on shorts)\n* SW_SPST should connect to PowerBoost to switch it rather than cut the ground line" (at 50.165 32.004) (layer F.SilkS)
+  (gr_text "Notes for v3:\n* Remove center pads from leds to cut down on shorts\n* SW_SPST should connect to PowerBoost to switch it rather than cut the ground line" (at 50.165 32.004) (layer F.SilkS)
     (effects (font (size 1.5 1.5) (thickness 0.3)) (justify left))
   )
   (gr_arc (start 86.90049 42.164) (end 86.90049 44.45) (angle 45) (layer Edge.Cuts) (width 0.05) (tstamp 5D413C07))

@@ -32,6 +32,7 @@ class FrameCounter {
   private:
     long lastPrint = 0;
     long frames = 0;
+    long lastClamp = 0;
   public:
     long printInterval = 2000;
     void tick() {
@@ -46,7 +47,13 @@ class FrameCounter {
       }
       ++frames;
     }
+    void clampToFramerate(int fps) {
+      int delayms = 1000 / fps - (millis() - lastClamp);
+      if (delayms > 0) {
+        delay(delayms);
+      }
+      lastClamp = millis();
+    }
 };
 
 #endif
-

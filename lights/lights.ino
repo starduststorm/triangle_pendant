@@ -17,53 +17,43 @@
 
 CRGBArray<NUM_LEDS> leds;
 
-CenterPulse centerPulsePattern;
 StandingWaves standingWavesPattern;
 Droplets dropletsPattern;
+Bits pinkBits(0);
+PinkFlash pinkFlash;
 Bits bitsPattern;
 SmoothPalettes smoothPalettes;
 
 Pattern *idlePatterns[] = {
 //  &centerPulsePattern, // looks awful on small triangle
-  &standingWavesPattern, 
+//  &standingWavesPattern, 
+  &pinkBits,
+  &pinkFlash,
   &dropletsPattern,
   &bitsPattern,
   &smoothPalettes
   };
 const unsigned int kIdlePatternsCount = ARRAY_SIZE(idlePatterns);
 
-RunInTriangles runInTrianglesPattern;
-SparklyFlash sparklyFlashPattern;
-CornerFlash cornerFlashPattern;
-ColorTornado colorTornadoPattern;
-
-Pattern *triggerPatterns[] = {
-//  &runInTrianglesPattern, // FIXME: breathe portion doesn't start from correct led on small triangle
-  &sparklyFlashPattern,
-  &cornerFlashPattern,
-  &colorTornadoPattern
-};
-const unsigned int kTriggerPatternsCount = ARRAY_SIZE(triggerPatterns);
-
 Pattern *activePattern = NULL;
+int activePatternIndex = -1;
 Pattern *lastPattern = NULL;
 
-bool triggerIsActive = false;
-
 /* ---- Test Options ---- */
-const bool kTestPatternTransitions = true;
-const int kIdlePatternTimeout = 1000 * (kTestPatternTransitions ? 15 : 60 * 2);
-const unsigned long kTestTriggerAtInterval = 0;//10000;//1000 * 35;//1000 * 10; // 0 for no test
+const bool kTestPatternTransitions = false;
+const int kIdlePatternTimeout = -1;//1000 * (kTestPatternTransitions ? 15 : 60 * 2);
 
-Pattern *testIdlePattern = &smoothPalettes;//&dropletsPattern;
-Pattern *testTriggerPattern = NULL;//&cornerFlashPattern;
+Pattern *testIdlePattern = NULL;//&smoothPalettes;//&dropletsPattern;
 
 /* ---------------------- */
 
-unsigned long lastTrigger = 0;
 FrameCounter fc;
 
-bool triggerTouchDown = false;
+bool contactTouchDown = false;
+unsigned long touchDownStart = 0;
+
+uint8_t brightness = 127;
+uint8_t lastBrightnessPhase = 0;
 
 void setup() {
 
@@ -75,21 +65,31 @@ void setup() {
   random16_add_entropy( analogRead(UNCONNECTED_PIN) );
 
   FastLED.addLeds<APA102, BGR>(leds, NUM_LEDS);
-  LEDS.setBrightness(127);
+  LEDS.setBrightness(brightness);
 
   fc.tick();
+}
+
+void nextPattern() {
+  if (testIdlePattern != NULL) {
+    activePattern = testIdlePattern;
+  } else {
+    if (activePattern) {
+      activePattern->stop();
+      lastPattern = activePattern;
+      activePattern = NULL;
+    }
+    activePattern = idlePatterns[++activePatternIndex % kIdlePatternsCount];
+  }
+  if (!activePattern->isRunning()) {
+    activePattern->start();
+  }
 }
 
 void loop() {
   for (unsigned i = 0; i < kIdlePatternsCount; ++i) {
     Pattern *pattern = idlePatterns[i];
-    if (pattern->isRunning() || pattern->isStopping()) {
-      pattern->loop(leds);
-    }
-  }
-  for (unsigned i = 0; i < kTriggerPatternsCount; ++i) {
-    Pattern *pattern = triggerPatterns[i];
-    if (pattern->isRunning() || pattern->isStopping()) {
+    if (pattern->isRunning()) {
       pattern->loop(leds);
     }
   }
@@ -98,25 +98,15 @@ void loop() {
   if (activePattern != NULL && !activePattern->isRunning()) {
     logf("Clearing inactive pattern %s", activePattern->description());
     activePattern = NULL;
-    triggerIsActive = false; // TODO: better way to detect?
   }
 
   // time out idle patterns
-  if (!triggerIsActive && activePattern != NULL && activePattern->isRunning() && activePattern->runTime() > kIdlePatternTimeout) {
+  if (activePattern != NULL && activePattern->isRunning() && (kIdlePatternTimeout != -1 && activePattern->runTime() > kIdlePatternTimeout)) {
     if (activePattern != testIdlePattern && activePattern->wantsToIdleStop()) {
-      activePattern->lazyStop();
-      lastPattern = activePattern;
-      activePattern = NULL;
+      nextPattern();
     }
   }
 
-  // check for trigger
-  if (Serial.available() > 0) {
-    int incoming = Serial.read();
-    if (incoming == 't') {
-      triggerPattern();
-    }
-  }
   int readVal = touchRead(TOUCH_PIN);
 //  for (int x = 0; x < readVal / 100; ++x) {
 //    if (x > 0 && x < NUM_LEDS) {
@@ -125,92 +115,37 @@ void loop() {
 //  }
 
   if (readVal > 800) {
-    triggerTouchDown = true;
+    if (!contactTouchDown) {
+      touchDownStart = millis();
+    }
+    contactTouchDown = true;
   }
-  if (triggerTouchDown == true && touchRead(TOUCH_PIN) < 500) {
-    triggerTouchDown = false;
-    triggerPattern();
-  }
-
-
-  if (kTestTriggerAtInterval > 0 && millis() - lastTrigger > kTestTriggerAtInterval) {
-    triggerPattern();
+  unsigned long touchDownDuration = millis() - touchDownStart;
+  const int brightnessFaderDelay = 500;
+  if (contactTouchDown) {
+    uint8_t phase = (touchDownDuration - brightnessFaderDelay) * 256 / 4000 + lastBrightnessPhase;
+    if (touchDownDuration > brightnessFaderDelay) {  
+      brightness = sin8(phase);
+      LEDS.setBrightness(brightness);
+    }
+    
+    if (touchRead(TOUCH_PIN) < 500) {
+      contactTouchDown = false;
+      if (touchDownDuration < brightnessFaderDelay) {
+        nextPattern();
+      } else {
+        lastBrightnessPhase = phase % 0x100;
+      }
+    }
   }
 
   // start a new idle pattern
   if (activePattern == NULL) {
-    Pattern *nextPattern;
-    if (testIdlePattern != NULL) {
-      nextPattern = testIdlePattern;
-    } else {
-      int choice = (int)random8(kIdlePatternsCount);
-      nextPattern = idlePatterns[choice];
-    }
-    if ((nextPattern != lastPattern || nextPattern == testIdlePattern) && !nextPattern->isRunning() && !nextPattern->isStopping() && nextPattern->wantsToRun()) {
-      nextPattern->start();
-      activePattern = nextPattern;
-    }
+    nextPattern();
   }
 
   FastLED.show();
 
   fc.tick();
-
+  fc.clampToFramerate(400);
 }
-
-void triggerPattern() {
-  if (triggerIsActive) {
-    logf("Skipping repeat trigger");
-    return;
-  }
-  logf("Trigger!");
-  if (activePattern != NULL) {
-    activePattern->stop();
-    lastPattern = activePattern;
-    activePattern = NULL;
-  }
-
-  Pattern *nextPattern;
-  if (testTriggerPattern != NULL) {
-    nextPattern = testTriggerPattern;
-  } else {
-    int choice = (int)random8(kTriggerPatternsCount);
-    logf("picked trigger %i", choice);
-    nextPattern = triggerPatterns[choice];
-  }
-  if (nextPattern) {
-    nextPattern->start();
-    activePattern = nextPattern;
-  }
-  lastTrigger = millis();
-  triggerIsActive = true;
-}
-
-/* patterns:
-
-    idle:
-    pulsing white/color outward from side centers
-    twinkling: bits
-    undulating: 2-3 parity standing waves, varying colors?
-    streaking: bits but 10-20px long
-    popping: droplets of color with box blur
-    noise: fill_raw_noise8
-    palettes: various palette fades with slowly shifting parameters
-
-    on trigger:
-    follow around entire triangle very quickly
-    blink entire triangle couple times
-    blink chunks, e.g. 10px solid random colors
-
-    breathe:
-    pulse: takes a deep breathe by fading up to max, then down into a pattern
-    lift&fall:
-
-*/
-
-/* Optimizations:
-
-    1. millis into seconds using div1024_32_16
-    2. replace any remaining float math with integer or with q44 or q62
-
-*/

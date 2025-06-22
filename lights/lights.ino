@@ -64,7 +64,7 @@ void setup() {
   randomSeed(analogRead(UNCONNECTED_PIN));
   random16_add_entropy( analogRead(UNCONNECTED_PIN) );
 
-  FastLED.addLeds<APA102, BGR>(leds, NUM_LEDS);
+  FastLED.addLeds<APA102HD, 11, 13, BGR, DATA_RATE_MHZ(16)>(leds, NUM_LEDS);
   LEDS.setBrightness(brightness);
 
   fc.tick();
